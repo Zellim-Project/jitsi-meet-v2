@@ -6,16 +6,19 @@ import _ from 'lodash';
 import React from 'react';
 
 import VideoLayout from '../../../../../modules/UI/videolayout/VideoLayout';
-import type { AbstractProps } from '../../../../features/conference/components/AbstractConference';
+import AudioModerationNotifications from '../../../../features/av-moderation/components/AudioModerationNotifications';
 import { getConferenceNameForTitle } from '../../../../features/base/conference';
 import { connect, disconnect } from '../../../../features/base/connection';
 import { translate } from '../../../../features/base/i18n';
 import { connect as reactReduxConnect } from '../../../../features/base/redux';
+import { setColorAlpha } from '../../../../features/base/util';
 import { Chat } from '../../../../features/chat';
 import { Filmstrip } from '../../../../features/filmstrip';
 import { CalleeInfoContainer } from '../../../../features/invite';
 import { LargeVideo } from '../../../../features/large-video';
 import { KnockingParticipantList, LobbyScreen } from '../../../../features/lobby';
+import { ParticipantsPane } from '../../../../features/participants-pane/components';
+import { getParticipantsPaneOpen } from '../../../../features/participants-pane/functions';
 import { Prejoin, isPrejoinPageVisible } from '../../../../features/prejoin';
 import { fullScreenChanged, showToolbox } from '../../../../features/toolbox/actions.web';
 import { Toolbox } from '../../../../features/toolbox/components/web';
@@ -25,8 +28,9 @@ import {
     AbstractConference,
     abstractMapStateToProps
 } from '../../../../features/conference/components/AbstractConference';
+import type { AbstractProps } from '../../../../features/conference/components/AbstractConference';
 
-import Labels from '../../../../features/conference/components/web/Labels';
+import ConferenceInfo from '../../../../features/conference/components/web/ConferenceInfo';
 import { default as Notice } from '../../../../features/conference/components/web/Notice';
 
 import CustomBackground from '../../../components/CustomBackground'
@@ -66,9 +70,9 @@ const LAYOUT_CLASSNAMES = {
 type Props = AbstractProps & {
 
     /**
-     * Whether the local participant is recording the conference.
+     * The alpha(opacity) of the background
      */
-    _iAmRecorder: boolean,
+    _backgroundAlpha: number,
 
     /**
      * Returns true if the 'lobby screen' is visible.
@@ -76,10 +80,20 @@ type Props = AbstractProps & {
     _isLobbyScreenVisible: boolean,
 
     /**
+     * If participants pane is visible or not.
+     */
+    _isParticipantsPaneVisible: boolean,
+
+    /**
      * The CSS class to apply to the root of {@link Conference} to modify the
      * application layout.
      */
     _layoutClassName: string,
+
+    /**
+     * The config specified interval for triggering mouseMoved iframe api events
+     */
+    _mouseMoveCallbackInterval: number,
 
     /**
      * Name for this conference room.
@@ -100,8 +114,13 @@ type Props = AbstractProps & {
  */
 class Conference extends AbstractConference<Props, *> {
     _onFullScreenChange: Function;
+    _onMouseEnter: Function;
+    _onMouseLeave: Function;
+    _onMouseMove: Function;
     _onShowToolbar: Function;
+    _originalOnMouseMove: Function;
     _originalOnShowToolbar: Function;
+    _setBackground: Function;
 
     /**
      * Initializes a new Conference instance.
@@ -112,9 +131,13 @@ class Conference extends AbstractConference<Props, *> {
     constructor(props) {
         super(props);
 
+        const { _mouseMoveCallbackInterval } = props;
+
         // Throttle and bind this component's mousemove handler to prevent it
         // from firing too often.
         this._originalOnShowToolbar = this._onShowToolbar;
+        this._originalOnMouseMove = this._onMouseMove;
+
         this._onShowToolbar = _.throttle(
             () => this._originalOnShowToolbar(),
             100,
@@ -123,8 +146,17 @@ class Conference extends AbstractConference<Props, *> {
                 trailing: false
             });
 
+        this._onMouseMove = _.throttle(
+            event => this._originalOnMouseMove(event),
+            _mouseMoveCallbackInterval,
+            {
+                leading: true,
+                trailing: false
+            });
+
         // Bind event handler so it is only bound once for every instance.
         this._onFullScreenChange = this._onFullScreenChange.bind(this);
+        this._setBackground = this._setBackground.bind(this);
     }
 
     /**
@@ -179,37 +211,78 @@ class Conference extends AbstractConference<Props, *> {
      */
     render() {
         const {
-            _iAmRecorder,
             _isLobbyScreenVisible,
+            _isParticipantsPaneVisible,
             _layoutClassName,
             _showPrejoin
         } = this.props;
-        const hideLabels = _iAmRecorder;
 
         return (
             <div
-                className = { _layoutClassName }
-                id = 'videoconference_page'
-                onMouseMove = { this._onShowToolbar }>
-                <CustomBackground />
-                <Notice />
-                <div id = 'videospace'>
-                    <LargeVideo />
-                    <KnockingParticipantList />
-                    <Filmstrip />
-                    { hideLabels || <Labels /> }
+                id = 'layout_wrapper'
+                onMouseEnter = { this._onMouseEnter }
+                onMouseLeave = { this._onMouseLeave }
+                onMouseMove = { this._onMouseMove } >
+                <div
+                    className = { _layoutClassName }
+                    id = 'videoconference_page'
+                    onMouseMove = { this._onShowToolbar }
+                    ref = { this._setBackground }>
+                    <ConferenceInfo />
+                    <CustomBackground />
+                    <Notice />
+                    <div id = 'videospace'>
+                        <LargeVideo />
+                        {!_isParticipantsPaneVisible
+                         && <div id = 'notification-participant-list'>
+                             <KnockingParticipantList />
+                             <AudioModerationNotifications />
+                         </div>}
+                        <Filmstrip />
+                    </div>
+
+                    { _showPrejoin || _isLobbyScreenVisible || <Toolbox /> }
+                    <Chat />
+
+                    { this.renderNotificationsContainer() }
+
+                    <CalleeInfoContainer />
+
+                    { _showPrejoin && <Prejoin />}
+
                 </div>
-
-                { _showPrejoin || _isLobbyScreenVisible || <Toolbox /> }
-                <Chat />
-
-                { this.renderNotificationsContainer() }
-
-                <CalleeInfoContainer />
-
-                { _showPrejoin && <Prejoin />}
+                <ParticipantsPane />
             </div>
         );
+    }
+
+    /**
+     * Sets custom background opacity based on config. It also applies the
+     * opacity on parent element, as the parent element is not accessible directly,
+     * only though it's child.
+     *
+     * @param {Object} element - The DOM element for which to apply opacity.
+     *
+     * @private
+     * @returns {void}
+     */
+    _setBackground(element) {
+        if (!element) {
+            return;
+        }
+
+        if (this.props._backgroundAlpha !== undefined) {
+            const elemColor = element.style.background;
+            const alphaElemColor = setColorAlpha(elemColor, this.props._backgroundAlpha);
+
+            element.style.background = alphaElemColor;
+            if (element.parentElement) {
+                const parentColor = element.parentElement.style.background;
+                const alphaParentColor = setColorAlpha(parentColor, this.props._backgroundAlpha);
+
+                element.parentElement.style.background = alphaParentColor;
+            }
+        }
     }
 
     /**
@@ -221,6 +294,39 @@ class Conference extends AbstractConference<Props, *> {
      */
     _onFullScreenChange() {
         this.props.dispatch(fullScreenChanged(APP.UI.isFullScreen()));
+    }
+
+    /**
+     * Triggers iframe API mouseEnter event.
+     *
+     * @param {MouseEvent} event - The mouse event.
+     * @private
+     * @returns {void}
+     */
+    _onMouseEnter(event) {
+        APP.API.notifyMouseEnter(event);
+    }
+
+    /**
+     * Triggers iframe API mouseLeave event.
+     *
+     * @param {MouseEvent} event - The mouse event.
+     * @private
+     * @returns {void}
+     */
+    _onMouseLeave(event) {
+        APP.API.notifyMouseLeave(event);
+    }
+
+    /**
+     * Triggers iframe API mouseMove event.
+     *
+     * @param {MouseEvent} event - The mouse event.
+     * @private
+     * @returns {void}
+     */
+    _onMouseMove(event) {
+        APP.API.notifyMouseMove(event);
     }
 
     /**
@@ -266,11 +372,15 @@ class Conference extends AbstractConference<Props, *> {
  * @returns {Props}
  */
 function _mapStateToProps(state) {
+    const { backgroundAlpha, mouseMoveCallbackInterval } = state['features/base/config'];
+
     return {
         ...abstractMapStateToProps(state),
-        _iAmRecorder: state['features/base/config'].iAmRecorder,
+        _backgroundAlpha: backgroundAlpha,
         _isLobbyScreenVisible: state['features/base/dialog']?.component === LobbyScreen,
+        _isParticipantsPaneVisible: getParticipantsPaneOpen(state),
         _layoutClassName: LAYOUT_CLASSNAMES[getCurrentLayout(state)],
+        _mouseMoveCallbackInterval: mouseMoveCallbackInterval,
         _roomName: getConferenceNameForTitle(state),
         _showPrejoin: isPrejoinPageVisible(state)
     };

@@ -2191,6 +2191,7 @@ export default {
                 APP.API.notifyReadyToClose();
             }
             APP.store.dispatch(kickedOut(room, participant));
+            this.hangup(false);
         });
 
         room.on(JitsiConferenceEvents.PARTICIPANT_KICKED, (kicker, kicked) => {

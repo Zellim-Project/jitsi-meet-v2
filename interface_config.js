@@ -261,19 +261,19 @@ var interfaceConfig = {
     /**
      * Specify mobile app scheme for opening the app from the mobile browser.
      */
-    // APP_SCHEME: 'org.jitsi.meet',
+    APP_SCHEME: 'com.zellim.chat',
 
     /**
      * Specify the Android app package name.
      */
-    // ANDROID_APP_PACKAGE: 'org.jitsi.meet',
+    ANDROID_APP_PACKAGE: 'com.zellim.chat',
 
     /**
      * Override the behavior of some notifications to remain displayed until
      * explicitly dismissed through a user action. The value is how long, in
      * milliseconds, those notifications should remain displayed.
      */
-    // ENFORCE_NOTIFICATION_AUTO_DISMISS_TIMEOUT: 15000,
+    ENFORCE_NOTIFICATION_AUTO_DISMISS_TIMEOUT: 5000,
 
     // List of undocumented settings
     /**

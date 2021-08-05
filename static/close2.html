@@ -352,7 +352,7 @@
           {
             redirect: url,
           },
-          "*"
+          "*",
         );
         window.location.href = url;
       }
@@ -365,7 +365,7 @@
             "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*" + // port and path
             "(\\?[;&a-z\\d%_.~+=-]*)?" + // query string
             "(\\#[-a-z\\d_]*)?$",
-          "i"
+          "i",
         ); // fragment locator
         return !!pattern.test(str);
       }
@@ -414,13 +414,13 @@
           } else {
             for (let i = 0; i < rating; i++) {
               $(".what-happened .rating-result").append(
-                "<span>" + i + "</span>"
+                "<span>" + i + "</span>",
               );
             }
             const diff = 5 - rating;
             for (let i = 0; i < diff; i++) {
               $(".what-happened .rating-result").append(
-                "<span class='regular'>" + i + "</span>"
+                "<span class='regular'>" + i + "</span>",
               );
             }
             $(".start").fadeOut("fast", function () {
@@ -439,19 +439,19 @@
             if (validURL(value)) {
               value = value.indexOf("://") === -1 ? "https://" + value : value;
               if (isDomain("zellim.us", value)) {
-                goto(value)
+                goto(value);
               } else {
                 $(".reference").after(
-                  '<p class="error">Please insert a valid Zellim room name or link</p>'
+                  '<p class="error">Please insert a valid Zellim room name or link</p>',
                 );
                 $("#room-name").addClass("error").focus();
               }
             } else {
-              goto("https://" + value + ".zellim.us")
+              goto("https://" + value + ".zellim.us");
             }
           } else {
             $(".reference").after(
-              '<p class="error">Please insert a room name or link</p>'
+              '<p class="error">Please insert a room name or link</p>',
             );
             $("#room-name").addClass("error").focus();
           }
@@ -481,21 +481,61 @@
             $(".thank-you").fadeIn("fast");
           } else {
             $("#tell-us").after(
-              '<p class="error">Please type a comment about your experience</p>'
+              '<p class="error">Please type a comment about your experience</p>',
             );
             $("#tell-us").addClass("error").focus();
           }
         });
 
-        $("#signup").click(e => {
-            e.preventDefault()
-            goto('https://app.zellim.com/signup')
-        })
+        $("#signup").click((e) => {
+          e.preventDefault();
+          goto("https://app.zellim.com/signup");
+        });
 
-        $("#gohome").click(e => {
-            e.preventDefault()
-            goto('https://zellim.com/')
-        })
+        $("#gohome").click((e) => {
+          e.preventDefault();
+          goto("https://zellim.com/");
+        });
+
+        $("#rating-5").click((e) => {
+          rate(5);
+        });
+        $("#rating-4").click((e) => {
+          rate(4);
+        });
+        $("#rating-3").click((e) => {
+          rate(3);
+        });
+        $("#rating-2").click((e) => {
+          rate(2);
+        });
+        $("#rating-1").click((e) => {
+          rate(1);
+        });
+
+        async function rate(score) {
+          const [room] = (
+            window.location.ancestorOrigins.length
+              ? window.location.ancestorOrigins[0]
+              : window.location.href
+          )
+            .replace("https://", "")
+            .split(".");
+
+          await fetch(
+            `https://app.zellim.com/module/system/conference-rating/rate`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                room,
+                score,
+              }),
+            },
+          );
+        }
       });
     </script>
   </head>
@@ -575,11 +615,7 @@
             data-currentStep=".start"
             >Join room again</a
           >
-          <a
-            href="#!"
-            id="gohome"
-            class="btn outline-blue"
-            title="Back to home"
+          <a href="#!" id="gohome" class="btn outline-blue" title="Back to home"
             >Back to home</a
           >
         </div>
